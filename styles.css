@@ -1,0 +1,81 @@
+:root {
+  --bioc-blue: #1f5b85;
+  --bioc-blue-dark: #163f5d;
+  --bioc-teal: #2f7f86;
+  --bioc-soft: #eef6f8;
+  --ink: #263238;
+  --muted: #65727a;
+  --border: #d9e3e8;
+}
+
+body { color: var(--ink); }
+
+
+main.content { width: 100%; }
+
+.hero {
+  margin: 0 0 2.4rem 0;
+  padding: 3rem 3.2rem 2.8rem;
+  border-radius: 22px;
+  background: linear-gradient(135deg, var(--bioc-blue-dark), var(--bioc-blue));
+  color: white;
+  box-shadow: 0 12px 34px rgba(31, 91, 133, .15);
+}
+.hero h1 { color: white; font-size: 3rem; line-height: 1.05; margin: .3rem 0 .8rem; }
+.eyebrow { letter-spacing: .12em; font-weight: 700; font-size: .78rem; opacity: .85; }
+.hero-subtitle { font-size: 1.3rem; max-width: 760px; opacity: .94; }
+.hero-meta { margin-top: 1.25rem; font-weight: 600; opacity: .8; }
+
+.quarto-title-block { display: none; }
+
+h1 { color: var(--bioc-blue-dark); margin-top: 3rem; border-bottom: 1px solid var(--border); padding-bottom: .5rem; }
+h2 { color: var(--bioc-blue); margin-top: 2.2rem; }
+h3 { color: var(--bioc-teal); }
+
+
+.callout { border-radius: 12px; }
+.callout.callout-style-default { border-left-width: 5px; }
+
+pre.sourceCode, div.sourceCode {
+  border-radius: 10px;
+}
+div.sourceCode { border: 1px solid #e2e8ec; }
+.cell-output-stdout pre {
+  background: #f7f9fa;
+  border-left: 3px solid #cbd8df;
+  border-radius: 8px;
+  padding: .9rem 1rem;
+}
+
+.table { border-radius: 10px; overflow: hidden; }
+.table thead { background: var(--bioc-soft); }
+.table > :not(caption) > * > * { padding: .65rem .8rem; }
+
+.break-card {
+  text-align: center;
+  padding: 2rem;
+  margin: 2rem 0;
+  background: var(--bioc-soft);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  color: var(--bioc-blue-dark);
+  font-weight: 650;
+}
+.break-big { font-size: 3rem; line-height: 1; margin-bottom: .4rem; }
+
+figure img { border-radius: 12px; border: 1px solid #e5ecef; }
+
+p, li { line-height: 1.62; }
+code:not(pre code) { color: var(--bioc-blue-dark); background: #f2f5f7; padding: .08em .28em; border-radius: 4px; }
+
+@media (max-width: 768px) {
+  .hero { padding: 2rem 1.5rem; }
+  .hero h1 { font-size: 2.2rem; }
+}
+
+/* Make Quarto's native active TOC entry easier to see */
+.sidebar nav[role="doc-toc"] a.active {
+  color: var(--bioc-blue-dark) !important;
+  border-left: 3px solid var(--bioc-blue) !important;
+  font-weight: 700;
+}

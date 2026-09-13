@@ -1,0 +1,1377 @@
+---
+title: "SpatialExperiment and SpaceTrooper"
+subtitle: "Unified infrastructure and quality control workflows for spatial omics data"
+author: "Dario Righelli"
+
+execute:
+  echo: true
+  warning: false
+  message: false
+
+engine: knitr
+editor: source
+---
+
+<!--
+WORKSHOP STRUCTURE (~180 min)
+
+00-10  Spatial omics in Bioconductor + OSTA
+10-25  SpatialExperiment from scratch: synthetic data
+25-45  Real data: SPE infrastructure + ggspavis + molecule assays
+45-50  Beyond SpatialExperiment
+50-55  IO ecosystem
+55-65  Break
+65-85  SpaceTrooper: spatial-aware quality control
+85-125 SpaceTrooper hands-on
+125-155 QScore, spatial diagnostics & interpretation
+155-180 Exercises / discussion / outlook
+
+-->
+
+::: {.hero}
+<div class="eyebrow">BIOCONDUCTOR WORKSHOP</div>
+
+# SpatialExperiment and SpaceTrooper
+
+<div class="hero-subtitle">Unified infrastructure and quality control workflows for spatial omics data</div>
+
+<div class="hero-meta">SpatialExperiment · OSTA · SpaceTrooper</div>
+:::
+
+## Learning goals
+
+By the end of this workshop, you should be able to:
+
+- understand how Bioconductor represents spatial omics experiments;
+- inspect and manipulate a `SpatialExperiment` object;
+- recognize how the same infrastructure can accommodate very different spatial technologies;
+- understand how real sequencing- and imaging-based datasets reuse the same `SpatialExperiment` infrastructure;
+- visualize spot/cell- and molecule-level spatial information with `ggspavis`;
+- understand how a `BumpyMatrix` can store molecule-level information inside a `SpatialExperiment` assay;
+- understand where `SpatialFeatureExperiment`, `MoleculeExperiment`, and spatial IO packages fit in the ecosystem;
+- apply spatial-aware quality control using `SpaceTrooper`.
+
+# Spatial omics in Bioconductor
+
+<!-- ~10 min -->
+
+## Spatial omics: one name, different technologies
+
+Spatial transcriptomics technologies can be broadly separated into two families:
+
+### Sequencing-based
+
+Examples include:
+
+- Visium / Visium HD
+- Slide-seq and related bead-based approaches
+
+Typical observational units are **spots or bins**.
+
+### Imaging-based
+
+Examples include:
+
+- Xenium
+- CosMx
+- MERSCOPE
+
+Typical observational units are **segmented cells**, while some platforms also provide
+molecule-level coordinates and cell or nuclear boundaries.
+
+The important point for this workshop is not the vendor or platform.
+
+::: {.callout-note title="Key idea"}
+**Different technologies generate different spatial information, but we still want common data structures and common analysis interfaces.**
+:::
+
+## OSTA: a map of the Bioconductor spatial ecosystem
+
+**OSTA — Orchestrating Spatial Transcriptomics Analysis with Bioconductor** provides
+an ecosystem-level view of spatial transcriptomics workflows in Bioconductor.
+
+It covers both major technology families and connects:
+
+- data infrastructure;
+- data import;
+- quality control;
+- preprocessing;
+- visualization;
+- downstream statistical analysis.
+
+For this workshop, we use OSTA as a **map of the ecosystem**, while focusing on
+the infrastructure that makes interoperability possible.
+
+## From an ecosystem to a common representation
+
+A spatial experiment may include:
+
+- a feature-by-observation assay matrix;
+- feature metadata;
+- observation metadata;
+- spatial coordinates;
+- images and image metadata;
+- technology-specific spatial information.
+
+The question is:
+
+::: {.callout-important title="The infrastructure question"}
+**How can analysis packages interact with all of these experiments without implementing a different interface for every platform?**
+:::
+
+# SpatialExperiment: a flexible infrastructure
+
+<!-- ~20 min -->
+
+## Building on Bioconductor infrastructure
+
+`SpatialExperiment` extends the existing Bioconductor experiment hierarchy:
+
+```text
+SummarizedExperiment
+        |
+        v
+SingleCellExperiment
+        |
+        v
+SpatialExperiment
+```
+
+This means that a spatial experiment keeps the familiar Bioconductor components:
+
+```r
+assays(spe)
+rowData(spe)
+colData(spe)
+```
+
+and adds spatially relevant information:
+
+```r
+spatialCoords(spe)
+imgData(spe)
+```
+
+## A SpatialExperiment is not an analysis workflow
+
+The role of `SpatialExperiment` is **representation**, not analysis.
+
+It does not prescribe:
+
+- normalization;
+- clustering;
+- spatial statistics;
+- segmentation;
+- differential expression;
+- quality control.
+
+Instead, it provides a common object on which downstream methods can operate.
+
+::: {.callout-tip title="Take-home message"}
+**SpatialExperiment describes what the experiment contains, not how it must be analyzed.**
+:::
+
+## One class, different technologies
+
+The same class can represent experiments with very different observational units.
+
+| | Sequencing-based | Imaging-based |
+|---|---|---|
+| Typical unit | spot / bin | cell |
+| Assay | gene counts | gene counts |
+| Coordinates | spot/bin coordinates | cell centroids |
+| Image | often present | often present |
+| Segmentation | usually not central | often important |
+| Molecules | usually not available | may be available |
+
+The common denominator is deliberately small.
+
+This is what makes the infrastructure reusable.
+
+# Hands-on I: build the abstraction from scratch
+
+<!-- ~15 min -->
+
+## Start with deliberately simple data
+
+Before looking at a real platform, we create two **small teaching objects** in
+memory:
+
+1. a spot-based, sequencing-like experiment;
+2. a cell-based, imaging-like experiment.
+
+These objects are intentionally synthetic. At this stage we want to isolate the
+**data model** from the complexity of vendor files, biological annotation, and
+large datasets.
+
+```{r}
+#| label: setup-spe
+library(SpatialExperiment)
+library(S4Vectors)
+
+set.seed(123)
+```
+
+## A spot-based experiment
+
+```{r}
+#| label: make-spot-spe
+
+nGenes <- 100
+nSpots <- 36
+
+spotCounts <- matrix(
+    rpois(nGenes * nSpots, lambda=5),
+    nrow=nGenes,
+    ncol=nSpots,
+    dimnames=list(
+        paste0("gene_", seq_len(nGenes)),
+        paste0("spot_", seq_len(nSpots))
+    )
+)
+
+spotGrid <- expand.grid(
+    x=seq_len(6),
+    y=seq_len(6)
+)
+
+speSeq <- SpatialExperiment(
+    assays=list(counts=spotCounts),
+    rowData=DataFrame(
+        gene_id=rownames(spotCounts)
+    ),
+    colData=DataFrame(
+        technology=rep("sequencing-based", nSpots),
+        unit=rep("spot", nSpots)
+    ),
+    spatialCoords=as.matrix(spotGrid)
+)
+
+speSeq
+```
+
+## A cell-based imaging experiment
+
+```{r}
+#| label: make-imaging-spe
+
+nCells <- 120
+
+cellCounts <- matrix(
+    rpois(nGenes * nCells, lambda=2),
+    nrow=nGenes,
+    ncol=nCells,
+    dimnames=list(
+        paste0("gene_", seq_len(nGenes)),
+        paste0("cell_", seq_len(nCells))
+    )
+)
+
+cellCoords <- cbind(
+    x=runif(nCells, 0, 1000),
+    y=runif(nCells, 0, 1000)
+)
+
+speImg <- SpatialExperiment(
+    assays=list(counts=cellCounts),
+    rowData=DataFrame(
+        gene_id=rownames(cellCounts)
+    ),
+    colData=DataFrame(
+        technology=rep("imaging-based", nCells),
+        unit=rep("cell", nCells),
+        cell_area=rgamma(nCells, shape=10, scale=8),
+        nucleus_area=rgamma(nCells, shape=8, scale=4)
+    ),
+    spatialCoords=cellCoords
+)
+
+speImg
+```
+
+## Same interface, different spatial units
+
+Run the **same commands** on both objects.
+
+```{r}
+#| label: inspect-synthetic-spe
+
+dim(speSeq)
+dim(speImg)
+
+assayNames(speSeq)
+assayNames(speImg)
+
+head(colData(speSeq))
+head(colData(speImg))
+
+head(spatialCoords(speSeq))
+head(spatialCoords(speImg))
+```
+
+A minimal plot is already possible using only the common spatial interface.
+
+```{r}
+#| label: plot-synthetic-spe
+#| fig-width: 7
+#| fig-height: 4.5
+
+plot(
+    spatialCoords(speSeq),
+    asp=1,
+    pch=16,
+    xlab="x",
+    ylab="y",
+    main="Synthetic spot-based experiment"
+)
+```
+
+::: {.callout-tip title="Take-home message"}
+**The observational unit changes; the Bioconductor interface does not.**
+:::
+
+# Hands-on II: the same infrastructure on real data
+
+<!-- ~20 min -->
+
+The synthetic objects showed the abstraction. Now we ask whether it survives
+contact with real data -- and whether downstream packages can make use of it.
+
+We use example datasets already distributed in Bioconductor and visualize them
+with `ggspavis`.
+
+```{r}
+#| label: setup-real-spe
+library(STexampleData)
+library(ggspavis)
+library(BumpyMatrix)
+```
+
+## Real sequencing-based data: Visium
+
+Load a real 10x Genomics Visium section from `STexampleData`.
+
+```{r}
+#| label: load-real-visium
+speVisium <- Visium_humanDLPFC()
+
+speVisium
+```
+
+The object is larger and biologically meaningful, but the interface is the one
+we have already seen.
+
+```{r}
+#| label: inspect-real-visium
+class(speVisium)
+dim(speVisium)
+assayNames(speVisium)
+
+head(rowData(speVisium))
+head(colData(speVisium))
+head(spatialCoords(speVisium))
+imgData(speVisium)
+```
+
+### Visualization through the infrastructure
+
+`ggspavis` does not need to know how the original Space Ranger files were
+organized. It receives a `SpatialExperiment` and uses the standardized
+information stored in the object.
+
+```{r}
+#| label: ggspavis-visium
+#| fig-width: 7
+#| fig-height: 6
+
+plotCoords(
+    speVisium,
+    annotate="ground_truth"
+)
+```
+
+The point is not the particular annotation. The important step is:
+
+```text
+Visium files -> SpatialExperiment -> ggspavis
+```
+
+Once the data are represented by the common class, visualization can operate on
+the infrastructure rather than on a vendor-specific file layout.
+
+## Real imaging-based data: seqFISH
+
+Imaging-based technologies can also be represented at the cell level by a
+`SpatialExperiment`.
+
+```{r}
+#| label: load-real-seqfish
+speSeqFISH <- seqFISH_mouseEmbryo()
+
+speSeqFISH
+```
+
+Again, start from the same interface.
+
+```{r}
+#| label: inspect-real-seqfish
+class(speSeqFISH)
+dim(speSeqFISH)
+assayNames(speSeqFISH)
+
+head(colData(speSeqFISH))
+head(spatialCoords(speSeqFISH))
+```
+
+### Cell-level representation
+
+At the aggregated cell level, the imaging experiment looks familiar: genes by
+cells plus spatial coordinates.
+
+```{r}
+#| label: ggspavis-seqfish-cells
+#| fig-width: 7
+#| fig-height: 6
+
+plotCoords(
+    speSeqFISH,
+    in_tissue=NULL,
+    y_reverse=FALSE
+)
+```
+
+## Imaging data can retain individual molecule coordinates
+
+This is where an imaging-based experiment can contain information that does not
+fit naturally into a simple numeric gene-by-cell matrix.
+
+`SpatialExperiment` defines a standardized assay named `molecules`. This assay
+is usually represented by a `BumpyMatrix`: every gene-by-cell entry can contain
+a variable number of molecule observations, for example their `x` and `y`
+coordinates.
+
+```{r}
+#| label: inspect-molecules-assay
+assayNames(speSeqFISH)
+
+class(molecules(speSeqFISH))
+dim(molecules(speSeqFISH))
+
+molecules(speSeqFISH)[1:2, 1:2]
+```
+
+Conceptually:
+
+```text
+                     cell_1             cell_2
+Gene A       (x,y), (x,y), ...       (x,y), ...
+Gene B              (x,y)          (x,y), (x,y)
+Gene C                ...                ...
+
+                  BumpyMatrix
+```
+
+This allows a single `SpatialExperiment` to keep both the aggregated counts and
+the underlying molecule-resolved information:
+
+```r
+spe <- SpatialExperiment(
+    assays=list(
+        counts=y,
+        molecules=mol
+    )
+)
+```
+
+The convenience accessor:
+
+```r
+molecules(spe)
+```
+
+is equivalent to retrieving the assay named `"molecules"`.
+
+### Visualize individual molecules
+
+The same structure is directly useful downstream. For example, `ggspavis` can
+plot the spatial locations of individual transcripts for a selected gene.
+
+```{r}
+#| label: ggspavis-molecules
+#| fig-width: 7
+#| fig-height: 6
+
+plotMolecules(
+    speSeqFISH,
+    molecule="Sox2"
+)
+```
+
+::: {.callout-important title="Why this matters"}
+A `SpatialExperiment` can therefore provide **both levels of representation**:
+cell-level counts and molecule-level coordinates. The common class is not tied
+to one spatial resolution.
+:::
+
+# Beyond SpatialExperiment
+
+<!-- ~5 min; one slide / very quick -->
+
+## When points and assays are not enough
+
+The examples above show that `SpatialExperiment` already covers a surprisingly
+wide range of use cases:
+
+- spot- or cell-level count matrices;
+- spatial coordinates;
+- images and image metadata;
+- molecule-level coordinates through a `BumpyMatrix` `molecules` assay.
+
+However, some experiments require richer spatial objects and operations than a
+matrix plus point coordinates can conveniently express.
+
+### `SpatialFeatureExperiment`
+
+`SpatialFeatureExperiment` extends the `SpatialExperiment` idea with
+geometry-aware infrastructure based on simple features (`sf`). This is useful
+for objects such as:
+
+- cell and nucleus segmentation polygons;
+- tissue boundaries;
+- spatial regions and annotations;
+- multiple geometries associated with the same experiment.
+
+### `MoleculeExperiment`
+
+`MoleculeExperiment` provides a dedicated representation for molecule-resolved
+experiments, with explicit molecule and boundary structures and operations for
+summarizing molecules into cell-level representations.
+
+This does **not** mean that molecule-level information cannot live inside a
+`SpatialExperiment`: we have just seen the `BumpyMatrix` `molecules` assay.
+Instead, the dedicated classes become useful when the spatial representation
+itself needs to be richer.
+
+::: {.callout-note title="Beyond SpatialExperiment"}
+**Start from a common abstraction; move to richer spatial infrastructure when the experiment requires it.**
+:::
+
+# Getting data in: the IO ecosystem
+
+<!-- ~5 min; one slide / very quick -->
+
+## Separate file formats from experiment representation
+
+Vendor outputs are complicated and change over time.
+
+Bioconductor therefore increasingly separates:
+
+```text
+vendor / platform files
+          |
+          v
+      IO layer
+          |
+          v
+Bioconductor experiment objects
+```
+
+Examples include:
+
+- `TENxIO` — general infrastructure for reading several 10x Genomics file formats;
+- `VisiumIO` — readers for Visium and Visium HD outputs;
+- `XeniumIO` — readers for 10x Genomics Xenium outputs;
+- `SpatialExperimentIO` — multi-platform readers for imaging-based technologies such as Xenium, CosMx, MERSCOPE, and seqFISH;
+- `SpatialFeatureExperiment` — readers that can build geometry-aware `SpatialFeatureExperiment` objects for several spatial platforms.
+
+This separation is important:
+
+::: {.callout-note title="IO principle"}
+**Reading files and analyzing experiments are different problems.**
+:::
+
+Once the data are represented through standard Bioconductor infrastructure,
+downstream methods can focus on the biology and statistics rather than on
+vendor-specific parsing.
+
+## Where we are
+
+At this point we have moved through:
+
+```text
+OSTA / ecosystem
+       |
+       v
+SpatialExperiment
+       |
+       +--> sequencing-based experiments
+       |
+       +--> imaging-based experiments
+       |
+       +--> richer representations when needed
+       |
+       +--> platform-specific IO
+```
+
+After the break we move from **data infrastructure** to **methodology**.
+
+# Break
+
+::: {.break-card}
+<div class="break-big">10 min</div>
+<div>Break</div>
+:::
+
+# From infrastructure to methods
+
+<!-- ~20 min -->
+
+## Why spatial-aware quality control?
+
+Standard single-cell QC metrics are useful, but imaging-based spatial omics
+introduces additional failure modes that are directly connected to image
+acquisition, segmentation, morphology, and spatial organization.
+
+The SpaceTrooper paper highlights examples including:
+
+- segmentation errors;
+- signal loss;
+- elevated background;
+- spatial distortions;
+- tissue-derived artifacts.
+
+::: {.callout-important title="Why SpaceTrooper?"}
+**SpaceTrooper is designed specifically for imaging-based single-cell spatial
+omics.** It combines expression-derived and morphological information rather
+than relying only on conventional scRNA-seq QC thresholds.
+:::
+
+## From fixed thresholds to a data-driven QC score
+
+Conventional QC often looks like this:
+
+```text
+metric 1 > threshold
+metric 2 < threshold
+metric 3 > threshold
+        |
+        v
+    keep / remove
+```
+
+This is simple, but each metric is considered separately and thresholds may not
+transfer well across tissues, platforms, or experiments.
+
+SpaceTrooper instead follows a data-driven strategy:
+
+```text
+expression-derived metrics
+          +
+morphological metrics
+          +
+platform-specific effects
+          |
+          v
+ integrated per-cell model
+          |
+          v
+      Quality Score
+```
+
+The goal is not to remove the need for biological judgement.
+
+The goal is to provide a **multivariate summary of cell quality** that can be
+inspected spatially.
+
+## What contributes to cell quality?
+
+The current SpaceTrooper workflow uses several complementary quantities.
+
+| Metric | What it captures |
+|---|---|
+| `log2SignalDensity` | transcript signal relative to cell size |
+| `Area_um` | cell size / possible segmentation abnormalities |
+| `log2Ctrl_total_ratio` | negative-control signal relative to total signal |
+| `log2AspectRatio` | abnormal cell elongation / morphology |
+| `dist_border` | proximity to a field-of-view border, when relevant (CosMx case) |
+
+For CosMx, aspect ratio and FOV-border distance can jointly capture a
+platform-specific **border effect**.
+
+::: {.callout-note title="The main idea"}
+A suspicious cell is not necessarily defined by one extreme metric.  
+**Several weak QC signals can become informative when considered together.**
+:::
+
+## SpaceTrooper in the Bioconductor workflow
+
+This is where the first part of the workshop becomes useful. The analysis layer
+does not need to reinvent data representation or vendor-file parsing:
+
+```text
+vendor / platform files
+          |
+          v
+ SpatialExperimentIO
+ readCosmxSXE()
+ readXeniumSXE()
+ readMerscopeSXE()
+          |
+          v
+   SpatialExperiment
+          |
+          +---- SpaceTrooper standardization
+          |       updateCosmxSPE()
+          |       updateXeniumSPE()
+          |
+          v
+     SpaceTrooper
+          |
+          +--> per-cell QC metrics
+          +--> spatial diagnostics
+          +--> Quality Score
+          +--> QC flags
+```
+
+SpaceTrooper also provides high-level platform readers for a shorter route:
+
+```r
+readCosmxSPE()
+readXeniumSPE()
+readMerfishSPE()
+```
+
+::: {.callout-note title="Infrastructure first"}
+The reader functions are not separate analysis universes: they converge on a
+**`SpatialExperiment`**, which is then enriched with the platform-specific
+metadata required by the QC methods.
+:::
+
+SpaceTrooper therefore works **on top of `SpatialExperiment`**, while targeting
+the specific needs of **imaging-based spatial omics**.
+
+# SpaceTrooper hands-on
+
+<!-- ~40 min -->
+
+## Setup
+
+For the practical we use the **1k-plex CosMx mouse brain dataset** distributed
+through `OSTA.data` and used in the OSTA imaging-based QC workflow.
+
+Unlike the tiny example bundled with SpaceTrooper, this is a realistically sized
+experiment: after import it contains approximately **950 targets and 48,556
+cells**, distributed across many fields of view. We retrieve cell-level data and
+boundaries, but skip the molecule-level transcript table because it is not needed
+for this QC practical.
+
+```{r}
+#| label: setup-spacetrooper
+
+library(OSTA.data)
+library(SpaceTrooper)
+library(SpatialExperiment)
+library(SummarizedExperiment)
+library(S4Vectors)
+library(ggplot2)
+
+set.seed(1713)
+```
+
+## Loading infrastructure: from files to `SpatialExperiment`
+
+This dataset is useful because we can make the different infrastructure layers
+explicit rather than starting from an already prepared object.
+
+For CosMx, there are two interoperable routes:
+
+```text
+Route A: convenience reader
+
+CosMx files
+    |
+    v
+SpaceTrooper::readCosmxSPE()
+    |
+    v
+SpatialExperiment
+
+
+Route B: composable Bioconductor infrastructure
+
+CosMx files
+    |
+    v
+SpatialExperimentIO::readCosmxSXE()
+    |
+    v
+SpatialExperiment
+    |
+    v
+SpaceTrooper::updateCosmxSPE()
+    |
+    v
+SpaceTrooper-ready SpatialExperiment
+```
+
+In the workshop we use **Route A**. This keeps the practical focused on
+SpaceTrooper while preserving the common Bioconductor representation:
+`readCosmxSPE()` returns a `SpatialExperiment`.
+
+The two routes are interoperable rather than competing alternatives.
+`readCosmxSPE()` itself relies on `SpatialExperimentIO::readCosmxSXE()` for the
+file import and then performs the SpaceTrooper-specific standardization by aid of the  
+`updateCosmxSPE()` function.
+
+::: {.callout-tip title="The same idea extends across platforms"}
+SpaceTrooper exposes `readCosmxSPE()`, `readXeniumSPE()`, and
+`readMerfishSPE()` as high-level readers. They provide a concise entry point
+from vendor outputs to a SpaceTrooper-ready `SpatialExperiment`.
+:::
+
+## Retrieve the OSTA CosMx dataset
+
+`OSTA.data_load()` downloads the dataset through the OSTA data infrastructure
+and caches the archive. We keep polygons but skip molecule-level coordinates.
+
+```{r}
+#| label: download-osta-cosmx
+
+datasetId <- "CosMx1k_MouseBrain2"
+
+archivePath <- OSTA.data_load(
+    datasetId,
+    pol=TRUE,
+    mol=FALSE
+)
+
+dataDir <- file.path(tempdir(), datasetId)
+dir.create(dataDir, recursive=TRUE, showWarnings=FALSE)
+unzip(archivePath, exdir=dataDir)
+
+dataDir
+```
+
+## Step 1 — load CosMx data with SpaceTrooper
+
+`readCosmxSPE()` is the high-level SpaceTrooper entry point. It reads the CosMx
+files, constructs a `SpatialExperiment`, and standardizes the metadata required
+by the downstream QC workflow.
+
+```{r}
+#| label: import-cosmx-spacetrooper
+
+spe <- readCosmxSPE(
+    dirName=dataDir
+)
+spe
+```
+
+The returned object is already a `SpatialExperiment`. Target counts and
+negative probes remain accessible through the standard Bioconductor interfaces.
+
+```{r}
+#| label: inspect-imported-cosmx
+
+class(spe)
+dim(spe)
+assayNames(spe)
+altExpNames(spe)
+
+head(spatialCoords(spe))
+head(colData(spe))
+metadata(spe)$technology 
+```
+
+## Step 2 — attach cell boundaries
+
+The downloaded OSTA archive also contains cell boundaries.
+`readAndAddPolygonsToSPE()` adds them to the same experiment object so that
+morphological and spatial diagnostics can use them directly.
+
+```{r}
+#| label: add-polygons
+
+spe <- readAndAddPolygonsToSPE(spe)
+spe$in_tissue <- TRUE
+
+spe
+```
+
+::: {.callout-important title="One object, several infrastructure layers"}
+We started from platform files, loaded them through SpaceTrooper, and
+attached geometry without abandoning the **`SpatialExperiment`** interface.
+:::
+
+Before doing any QC, we can see that the colData contains the expected CosMx-specific polygon as sf geometry.
+
+```{r}
+#| label: inspect-real-spe
+head(colData(spe))
+```
+
+## Look at the experiment before computing QC
+
+With tens of thousands of cells and many FOVs, we can now inspect actual spatial
+structure rather than a toy example.
+
+```{r}
+#| label: plot-cosmx-centroids
+#| fig-width: 8
+#| fig-height: 6
+
+plotCentroids(spe)
+```
+
+## Check the field-of-view geometry
+
+For CosMx, FOV placement is part of the technical structure of the experiment.
+A spatial misalignment between FOV coordinates and cell centroids would directly
+affect spatially derived QC quantities.
+
+```{r}
+#| label: plot-fovs
+#| fig-width: 9
+#| fig-height: 7
+
+plotCellsFovs(
+    spe,
+    pointSize=0.4,
+    pointAlpha=0.35,
+    numberSize=3
+)
+```
+
+### Question
+
+Do the cell centroids appear correctly positioned inside the FOVs?
+
+This is a useful reminder that **QC begins before calculating a score**.
+
+### Zoom into a set of FOVs
+
+A larger dataset also lets us inspect local FOV structure while keeping the
+global tissue context.
+
+```{r}
+#| label: zoom-fovs
+#| fig-width: 9
+#| fig-height: 7
+
+focusFovs <- c(98:100, 113:115, 122:124)
+
+plotZoomFovsMap(
+    spe,
+    mapPointCol="darkgreen",
+    colourBy="Mean.DAPI",
+    fovs=focusFovs
+)
+```
+
+We will reuse the same FOVs for detailed polygon-level visualizations.
+
+## Compute imaging-specific QC metrics
+
+`spatialPerCellQC()` enriches the `SpatialExperiment` with per-cell QC metrics.
+Because `readCosmxSXE()` already placed the negative probes in the `NegPrb`
+alternative experiment, we can use that structure directly.
+
+```{r}
+#| label: spatial-qc
+
+spe <- spatialPerCellQC(
+    spe,
+    rmZeros=TRUE
+)
+
+colnames(colData(spe))
+```
+
+Let's focus on the metrics that contribute most directly to the integrated
+quality assessment.
+
+```{r}
+#| label: inspect-qc-metrics
+
+qcMetrics <- c(
+    "log2SignalDensity",
+    "Area_um",
+    "log2Ctrl_total_ratio",
+    "log2AspectRatio",
+    "dist_border"
+)
+
+summary(as.data.frame(colData(spe)[, qcMetrics]))
+```
+
+## Look at metrics one at a time
+
+Before computing an integrated score, inspect the marginal distributions.
+
+```{r}
+#| label: metric-hist-signal
+#| fig-width: 7
+#| fig-height: 4.5
+
+plotMetricHist(
+    spe,
+    metric="log2SignalDensity"
+)
+```
+
+```{r}
+#| label: metric-hist-area
+#| fig-width: 7
+#| fig-height: 4.5
+
+plotMetricHist(
+    spe,
+    metric="Area_um"
+)
+```
+
+::: {.callout-warning title="Do not jump straight to filtering"}
+An extreme value can represent technical failure, unusual morphology, or true
+biology. The spatial location of the cell helps distinguish these possibilities.
+:::
+
+## Put the metrics back into space
+
+Plotting all ~48k polygons at once is possible, and depends on your machine, 
+but a focused set of neighboring FOVs is easier to interpret during the workshop.
+
+```{r}
+#| label: make-focus-spe
+
+speFocus <- spe[, spe$fov %in% focusFovs]
+dim(speFocus)
+```
+
+```{r}
+#| label: plot-qc-polygons
+#| fig-width: 9
+#| fig-height: 7
+
+plotPolygons(
+    speFocus,
+    colourBy="log2SignalDensity"
+)
+```
+
+```{r}
+#| label: plot-qc-polygons-background
+#| fig-width: 9
+#| fig-height: 7
+
+plotPolygons(
+    speFocus,
+    colourBy="log2Ctrl_total_ratio"
+)
+```
+
+### Discussion
+
+Look for cells or regions with:
+
+- low signal density;
+- unusual cell area;
+- elevated negative-control signal;
+- extreme aspect ratio;
+- proximity to FOV borders.
+
+Do these features identify the **same cells**, or different kinds of suspicious
+cells?
+
+# From QC metrics to the Quality Score
+
+<!-- ~30 min -->
+
+## Compute the integrated Quality Score
+
+The current development version uses `computeQScore()`.
+
+The function learns how the QC variables combine and stores a per-cell
+`QScore` in `colData(spe)`.
+
+```{r}
+#| label: compute-qscore
+
+set.seed(1713)
+
+spe <- computeQScore(spe)
+
+summary(spe$QScore)
+```
+
+The score ranges from **0 to 1**:
+
+- values closer to **0** indicate lower quality;
+- values closer to **1** indicate higher quality.
+
+The current model combines signal density, cell size, control-to-total signal,
+and — when relevant — morphology together with FOV-border effects.
+
+## What is the model doing?
+
+Conceptually:
+
+```text
+                  log2SignalDensity
+                         |
+Area_um ----------------+---------------- log2Ctrl_total_ratio
+                         |
+             morphology / border effect
+                         |
+                         v
+                regularized model
+                         |
+                         v
+                      QScore
+```
+
+The important point for the workshop is not to memorize the model formula.
+
+> **The score integrates multiple technical signatures that may be weak or
+> ambiguous when inspected independently.**
+
+## Inspect the QScore distribution
+
+```{r}
+#| label: qscore-hist
+#| fig-width: 7
+#| fig-height: 4.5
+
+plotMetricHist(
+    spe,
+    metric="QScore"
+)
+```
+
+### Question
+
+Would you choose a filtering threshold before seeing this distribution?
+
+SpaceTrooper does not make the threshold a biological truth.  
+The score is continuous and should be inspected in the context of the dataset.
+
+## Map quality back onto the tissue
+
+```{r}
+#| label: qscore-space
+#| fig-width: 8
+#| fig-height: 6
+
+speFocus <- spe[, spe$fov %in% focusFovs]
+
+plotPolygons(
+    speFocus,
+    colourBy="QScore"
+) +
+    scale_fill_viridis_c(option="plasma")
+
+# plotPolygons(
+#     spe,
+#     colourBy="QScore"
+# ) +
+#     scale_fill_viridis_c(option="plasma")
+```
+
+Now compare this map to the individual metrics.
+
+### What does the QScore capture?
+
+Ask whether low-QScore cells coincide with:
+
+- low transcript density;
+- large or unusual cell shapes;
+- high negative-control signal;
+- cells close to problematic FOV borders;
+- spatially coherent technical regions.
+
+This is the central interpretative step of the practical.
+
+## Flag cells — but only after inspection
+
+SpaceTrooper provides `computeQScoreFlags()` to turn the continuous score into a
+binary flag. The threshold is arbitrary and depends on the experiment, tissue, and platform.
+
+```{r}
+#| label: qscore-flags-05
+
+spe <- computeQScoreFlags(
+    spe,
+    qsThreshold=0.5
+)
+
+table(spe$low_QScore)
+```
+
+Visualize the result first across the complete experiment. This is where the
+spatial structure of low-quality cells becomes apparent, including enrichment
+along tissue and FOV borders.
+
+```{r}
+#| label: qscore-flags-centroids-05
+#| fig-width: 9
+#| fig-height: 7
+
+plotCentroids(
+    spe,
+    colourBy="low_QScore"
+)
+```
+
+Then zoom to the selected FOVs and inspect the same pattern at polygon level.
+
+```{r}
+#| label: qscore-flags-space-05
+#| fig-width: 8
+#| fig-height: 6
+
+speFocus <- spe[, spe$fov %in% focusFovs]
+
+plotPolygons(
+    speFocus,
+    colourBy="low_QScore"
+) +
+    scale_fill_manual(
+        values=c(
+            "TRUE"="red",
+            "FALSE"="#c0c8cf"
+        )
+    )
+```
+
+## Thresholds are decisions, not constants
+
+Try a more stringent threshold:
+
+```{r}
+#| label: qscore-flags-075
+
+spe <- computeQScoreFlags(
+    spe,
+    qsThreshold=0.75
+)
+
+table(spe$low_QScore)
+```
+
+```{r}
+#| label: qscore-flags-space-075
+#| fig-width: 8
+#| fig-height: 6
+
+speFocus <- spe[, spe$fov %in% focusFovs]
+
+plotPolygons(
+    speFocus,
+    colourBy="low_QScore"
+) +
+    scale_fill_manual(
+        values=c(
+            "TRUE"="red",
+            "FALSE"="#c0c8cf"
+        )
+    )
+```
+
+::: {.callout-important title="Interpret before filtering"}
+The useful question is not *“What is the correct universal QScore threshold?”*
+
+It is:
+
+**“Which technical artifacts are being captured, and what filtering decision is
+appropriate for this experiment?”**
+:::
+
+# Exercise: diagnose low-quality cells
+
+<!-- ~15 min -->
+
+Work in small groups or individually.
+
+1. Choose **two individual QC metrics**.
+2. Inspect their distributions.
+3. Map them spatially.
+4. Compare them with `QScore`.
+5. Choose a candidate QScore threshold.
+6. Explain **which type of artifact** your filtering decision appears to target.
+
+Useful functions:
+
+```r
+plotMetricHist()
+plotCentroids()
+plotPolygons()
+computeQScoreFlags()
+```
+
+::: {.callout-tip title="Bonus"}
+Instead of starting from QScore, select a suspicious spatial region first and
+ask which QC variables explain why its cells receive low scores.
+:::
+
+# SpaceTrooper: take-home messages
+
+<!-- ~10 min -->
+
+1. **Imaging-based spatial QC has failure modes that are not captured by
+   sequencing-derived metrics alone.**
+
+2. `SpatialExperiment` provides the interoperable data infrastructure;
+   **SpaceTrooper provides specialized methodology on top of it.**
+
+3. SpaceTrooper combines **expression-derived, morphological, and
+   platform-specific information**.
+
+4. `QScore` is a **continuous multivariate quality measure**, not an automatic
+   biological truth.
+
+5. QC decisions should always be interpreted **in space**.
+
+# Workshop outlook
+
+We have moved through the complete story:
+
+```text
+OSTA / Bioconductor ecosystem
+            |
+            v
+     SpatialExperiment
+      /            \
+sequencing       imaging
+                    |
+                    v
+               SpaceTrooper
+                    |
+        +-----------+-----------+
+        |           |           |
+     metrics     QScore      spatial QC
+```
+
+The broader message is:
+
+::: {.callout-note title="Infrastructure first, specialization later"}
+A flexible common representation makes it possible to build specialized
+technology-aware methods without fragmenting the analysis ecosystem.
+:::
+
+# Resources
+
+- **OSTA** — Orchestrating Spatial Transcriptomics Analysis with Bioconductor
+- **OSTA.data** — example datasets used throughout OSTA
+- **SpatialExperiment** — core spatial experiment infrastructure
+- **SpaceTrooper** — imaging-based spatial omics quality control
+- **SpaceTrooper preprint** — Banzi et al., *SpaceTrooper: a quality control
+  framework for imaging-based spatial omics data*
+- **SpaceTrooper development repository** — `drighelli/SpaceTrooper`, branch
+  `devel` (same as Bioconductor devel version)
+
+# Session information
+
+```{r}
+#| label: session-info
+
+sessionInfo()
+```
