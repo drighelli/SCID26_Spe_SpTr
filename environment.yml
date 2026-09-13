@@ -1,0 +1,75 @@
+name: scid2026-spatialexperiment-spacetrooper
+
+channels:
+  - conda-forge
+  - bioconda
+
+dependencies:
+  # Bioconductor devel 3.24 currently uses R 4.6.x
+  - r-base=4.6.1
+
+  # Core R environment / workshop utilities
+  - r-biocmanager
+  - r-ggplot2
+  - r-knitr
+  - r-rmarkdown
+  - r-quarto
+
+  # Positron-friendly R tooling
+  # Positron provides its own R kernel/LSP, so languageserver/httpgd are not required.
+  - r-pak
+  - r-renv
+  - r-usethis
+  - r-cli
+  - r-crayon
+  - r-roxygen2
+  - r-pkgload
+
+  # Useful binary dependencies for the spatial stack
+  - r-arrow
+  - r-data.table
+  - r-dplyr
+  - r-e1071
+  - r-ggpubr
+  - r-robustbase
+  - r-sf
+  - r-cowplot
+  - r-glmnet
+  - r-rlang
+  - r-viridis
+
+  # Build / system dependencies
+  - git
+  - make
+  - pkg-config
+  - c-compiler
+  - cxx-compiler
+  - fortran-compiler
+  - gdal
+  - geos
+  - proj
+  - libudunits2
+  - libxml2
+  - libcurl
+  - openssl
+  - hdf5
+
+  # Quarto CLI.
+  # Positron Desktop already bundles Quarto, but keeping it in the environment
+  # also allows quarto render/preview to work from a terminal or remote setup.
+  - quarto
+
+# After creating the Conda environment, run:
+#
+#   conda env create -f environment_scid2026_spatialexperiment_spacetrooper.yml
+#   conda activate scid2026-spatialexperiment-spacetrooper
+#   Rscript setup_spatialexperiment_spacetrooper_workshop.R
+#
+# The R setup script switches the complete installation to Bioconductor devel
+# (currently 3.24) and installs all Bioconductor packages from that repository,
+# including SpaceTrooper. This avoids mixing Bioconductor release and devel
+# packages and avoids installing SpaceTrooper from GitHub.
+#
+# Positron itself is an IDE application and is not installed by this Conda
+# environment. The packages above provide the R/Quarto tooling expected for
+# a smooth Positron-based workshop environment.
