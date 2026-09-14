@@ -91,7 +91,7 @@ The workshop material is available at:
 /home/rstudio/workshop
 ```
 
-To stop the container, press `Ctrl+C`.
+To stop the container, press `Ctrl+C` in the terminal.
 
 ---
 
@@ -104,8 +104,19 @@ The workshop repository is available at:
 ```text
 /home/rstudio/ifbdata/scid2026/dario/SCID26_Spe_SpTr
 ```
+### IFB virtual machine
 
-Open a terminal in RStudio Server and run:
+When creating the IFB Biosphere virtual machine, select:
+
+```text
+Flavor: ifb.tr.2xlarge
+CPU:    16 vCPU
+RAM:    16 GB
+Disk:   200 GB
+````
+
+Once the virtual machine is available, open a Terminal from RStudio Server and
+move to the workshop repository:
 
 ```bash
 cd /home/rstudio/ifbdata/scid2026/dario/SCID26_Spe_SpTr
