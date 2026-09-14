@@ -2,12 +2,13 @@
 title: "SpatialExperiment and SpaceTrooper"
 subtitle: "Unified infrastructure and quality control workflows for spatial omics data"
 author: "Dario Righelli"
-
+date: today
+date-format: "D MMMM YYYY"
+output-file: index.html
 execute:
   echo: true
   warning: false
   message: false
-
 engine: knitr
 editor: source
 ---
