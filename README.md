@@ -33,6 +33,72 @@ hands-on analysis.
 
 ---
 
+# Minimum requirements
+
+## Local Docker setup
+
+To run the workshop locally using Docker, we recommend:
+
+- **CPU:** at least 4 cores;
+- **RAM:** at least 8 GB available to Docker;
+- **Disk space:** at least 20 GB free;
+- **Operating system:** recent Linux, macOS, or Windows;
+- **Docker:** a recent version of Docker Desktop or Docker Engine;
+- **Browser:** any recent web browser;
+- **Internet connection:** required to download the Docker image.
+
+The workshop image currently targets:
+
+```text
+linux/amd64
+````
+
+Intel-based Linux and macOS systems can run it natively.
+
+Apple Silicon Macs can run the image through Docker's `linux/amd64`
+emulation by adding:
+
+```bash
+--platform linux/amd64
+```
+
+to the `docker run` command.
+
+The container exposes RStudio Server on port:
+
+```text
+8787
+```
+
+so this port must be available on the local machine.
+
+### Recommended configuration
+
+For a smoother experience, especially when working with the spatial datasets
+used in the practical sessions, we recommend:
+
+* **CPU:** 4 or more cores;
+* **RAM:** 16 GB;
+* **Disk space:** 25 GB or more.
+
+## IFB Biosphere setup
+
+Participants using the IFB virtual machine do not need Docker installed
+locally.
+
+They only need:
+
+* access to the assigned IFB virtual machine;
+* access to RStudio Server through a web browser;
+* terminal access from RStudio Server;
+* `sudo` privileges on the virtual machine during the initial setup;
+* an internet connection during package and dataset installation.
+
+The R and system dependencies are installed using the scripts provided in
+this repository.
+
+---
+
 # Recommended setup: Docker
 
 The easiest way to run the workshop locally is using the pre-built Docker image
@@ -65,6 +131,12 @@ docker --version
 ```bash
 docker pull ghcr.io/drighelli/scid26_spe_sptr:latest
 ```
+
+```markdown
+> **Note**
+> The first `docker pull` may require several minutes because the image contains
+> the complete R/Bioconductor environment and the workshop data.
+````
 
 ## 3. Start RStudio Server
 
