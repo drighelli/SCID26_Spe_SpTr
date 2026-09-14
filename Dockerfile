@@ -19,10 +19,6 @@ COPY scripts/download_data.R /tmp/download_data.R
 
 RUN Rscript /tmp/download_data.R
 
-COPY workshop /home/rstudio/workshop
-
-RUN chown -R rstudio:rstudio /home/rstudio/workshop
-
-USER rstudio
+COPY --chown=rstudio:rstudio workshop /home/rstudio/workshop
 
 WORKDIR /home/rstudio/workshop
