@@ -1,0 +1,32 @@
+project:
+  type: default
+  output-dir: _site
+
+execute:
+  freeze: false
+
+format:
+  html:
+    theme: cosmo
+    css: styles.css
+
+    toc: true
+    toc-title: "Contents"
+    toc-depth: 2
+    toc-location: left
+
+    grid:
+      sidebar-width: 260px
+      body-width: 1100px
+      margin-width: 260px
+      gutter-width: 1.5rem
+
+    smooth-scroll: true
+
+    code-fold: false
+    code-tools: true
+    code-copy: true
+    code-overflow: wrap
+
+    df-print: paged
+    anchor-sections: true
