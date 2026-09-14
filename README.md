@@ -133,9 +133,8 @@ docker pull ghcr.io/drighelli/scid26_spe_sptr:latest
 ```
 
 ```markdown
-> **Note**
-> The first `docker pull` may require several minutes because the image contains
-> the complete R/Bioconductor environment and the workshop data.
+**Note**
+The first `docker pull` may require several minutes because the image contains the complete R/Bioconductor environment and the workshop data.
 ````
 
 ## 3. Start RStudio Server
