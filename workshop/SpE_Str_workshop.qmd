@@ -191,8 +191,6 @@ This is what makes the infrastructure reusable.
 
 # Hands-on I: build the abstraction from scratch
 
-<!-- ~15 min -->
-
 ## Start with deliberately simple data
 
 Before looking at a real platform, we create two **small teaching objects** in
@@ -306,6 +304,9 @@ assayNames(speImg)
 head(colData(speSeq))
 head(colData(speImg))
 
+head(rowData(speSeq))
+head(rowData(speImg))
+
 head(spatialCoords(speSeq))
 head(spatialCoords(speImg))
 ```
@@ -332,8 +333,6 @@ plot(
 :::
 
 # Hands-on II: the same infrastructure on real data
-
-<!-- ~20 min -->
 
 The synthetic objects showed the abstraction. Now we ask whether it survives
 contact with real data -- and whether downstream packages can make use of it.
@@ -524,8 +523,6 @@ to one spatial resolution.
 
 # Beyond SpatialExperiment
 
-<!-- ~5 min; one slide / very quick -->
-
 ## When points and assays are not enough
 
 The examples above show that `SpatialExperiment` already covers a surprisingly
@@ -566,8 +563,6 @@ itself needs to be richer.
 :::
 
 # Getting data in: the IO ecosystem
-
-<!-- ~5 min; one slide / very quick -->
 
 ## Separate file formats from experiment representation
 
@@ -632,8 +627,6 @@ After the break we move from **data infrastructure** to **methodology**.
 :::
 
 # From infrastructure to methods
-
-<!-- ~20 min -->
 
 ## Why spatial-aware quality control?
 
@@ -768,11 +761,7 @@ the specific needs of **imaging-based spatial omics**.
 For the practical we use the **1k-plex CosMx mouse brain dataset** distributed
 through `OSTA.data` and used in the OSTA imaging-based QC workflow.
 
-Unlike the tiny example bundled with SpaceTrooper, this is a realistically sized
-experiment: after import it contains approximately **950 targets and 48,556
-cells**, distributed across many fields of view. We retrieve cell-level data and
-boundaries, but skip the molecule-level transcript table because it is not needed
-for this QC practical.
+This is a realistically sized experiment: after import it contains approximately **950 targets and 48,556 cells**, distributed across many fields of view. We retrieve cell-level data and boundaries, but skip the molecule-level transcript table because it is not needed for this QC practical.
 
 ```{r}
 #| label: setup-spacetrooper
@@ -854,7 +843,7 @@ archivePath <- OSTA.data_load(
     mol=FALSE
 )
 
-dataDir <- file.path(tempdir(), datasetId)
+(dataDir <- file.path(tempdir(), datasetId))
 dir.create(dataDir, recursive=TRUE, showWarnings=FALSE)
 unzip(archivePath, exdir=dataDir)
 
@@ -889,7 +878,10 @@ altExpNames(spe)
 
 head(spatialCoords(spe))
 head(colData(spe))
+head(rowData(spe))
+head(metadata(spe)$fov_positions)
 metadata(spe)$technology 
+
 ```
 
 ## Step 2 — attach cell boundaries
@@ -945,7 +937,7 @@ affect spatially derived QC quantities.
 
 plotCellsFovs(
     spe,
-    pointSize=0.4,
+    pointSize=0.3,
     pointAlpha=0.35,
     numberSize=3
 )
