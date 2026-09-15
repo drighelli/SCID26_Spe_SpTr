@@ -36,6 +36,10 @@ WORKSHOP STRUCTURE (~180 min)
 
 <div class="hero-subtitle">Unified infrastructure and quality control workflows for spatial omics data</div>
 
+<div class="hero-meta">
+Dario Righelli · `r format(Sys.Date(), "%d %B %Y")`
+</div>
+
 <div class="hero-meta">SpatialExperiment · OSTA · SpaceTrooper</div>
 :::
 
