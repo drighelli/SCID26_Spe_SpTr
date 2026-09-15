@@ -371,7 +371,6 @@ assayNames(speVisium)
 head(rowData(speVisium))
 head(colData(speVisium))
 head(spatialCoords(speVisium))
-imgData(speVisium)
 ```
 
 ### Visualization through the infrastructure
@@ -380,6 +379,8 @@ imgData(speVisium)
 organized. It receives a `SpatialExperiment` and uses the standardized
 information stored in the object.
 
+You can plot the spots coordinates with the ground truth annotation.
+
 ```{r}
 #| label: ggspavis-visium
 #| fig-width: 7
@@ -387,10 +388,17 @@ information stored in the object.
 
 plotCoords(
     speVisium,
+    point_size = 0.5,
     annotate="ground_truth"
 )
 ```
 
+Or you can plot the visium experiment with a `colData` or `rowData` annotation and highlight only the in-tissue spots.
+
+```{r}
+plotVisium(speVisium, annotate="ground_truth", highlight="in_tissue", 
+                 legend_position="none", point_size=0.5)
+```
 The point is not the particular annotation. The important step is:
 
 ```text
